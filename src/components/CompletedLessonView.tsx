@@ -1,284 +1,327 @@
 // src/components/CompletedLessonView.tsx
 'use client'
 
-import { ArrowLeft, Edit3, Calendar, CheckCircle, Tag, TrendingUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { ArrowLeft, Edit, Calendar, Star, Target, Brain, Heart, AlertCircle } from 'lucide-react'
+import InteractiveLessonFlow from './InteractiveLessonFlow'
 
-interface CompletedLessonViewProps {
-  lesson: any
-  reflection: any
-  onBack: () => void
-  onEdit: () => void
+interface Reflection {
+  id: string
+  lesson_id: number
+  structured_data: any
+  completed: boolean
+  created_at: string
+  updated_at: string
 }
 
-export default function CompletedLessonView({ lesson, reflection, onBack, onEdit }: CompletedLessonViewProps) {
-  const content = reflection?.content || {}
-  
-  // For Day 1 - Problem categorization
-  const renderDay1Summary = () => {
-    const internalProblems = content.internalProblems || []
-    const externalProblems = content.externalProblems || []
-    const categories = content.categories || {}
-    
-    // Count problems by category
-    const categoryCounts: Record<string, number> = {}
-    Object.values(categories).forEach((cat: any) => {
-      if (cat) {
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1
-      }
-    })
-    
-    const topCategories = Object.entries(categoryCounts)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 3)
-    
+interface Lesson {
+  id: number
+  day_number: number
+  week_number: number
+  title: string
+  content: string
+  prompts: string[]
+  program_type: string
+}
+
+interface Props {
+  lesson: Lesson
+  userId: string
+  onBack: () => void
+}
+
+export default function CompletedLessonView({ lesson, userId, onBack }: Props) {
+  const [reflection, setReflection] = useState<Reflection | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
+
+  useEffect(() => {
+    fetchReflection()
+  }, [lesson.id, userId])
+
+  async function fetchReflection() {
+    try {
+      const { data, error } = await supabase
+        .from('reflections')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('lesson_id', lesson.id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') throw error
+      setReflection(data)
+    } catch (error) {
+      console.error('Error fetching reflection:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function getCategoryIcon(category: string) {
+    switch(category) {
+      case 'Conditioning': return '🧬'
+      case 'Mind': return '🧠'
+      case 'Emotional': return '❤️'
+      case 'Unknown': return '❓'
+      default: return '•'
+    }
+  }
+
+  function getCategoryColor(category: string) {
+    switch(category) {
+      case 'Conditioning': return 'text-purple-400'
+      case 'Mind': return 'text-blue-400'
+      case 'Emotional': return 'text-red-400'
+      case 'Unknown': return 'text-gray-400'
+      default: return 'text-gray-300'
+    }
+  }
+
+  if (loading) {
     return (
-      <div className="space-y-6">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4">
-            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Internal Problems</p>
-            <p className="text-2xl font-bold text-blue-900 dark:text-blue-300">{internalProblems.length}</p>
-          </div>
-          <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-4">
-            <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">External Problems</p>
-            <p className="text-2xl font-bold text-orange-900 dark:text-orange-300">{externalProblems.length}</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    )
+  }
+
+  if (isEditing) {
+    return (
+      <InteractiveLessonFlow
+        lesson={lesson}
+        onComplete={() => {
+          setIsEditing(false)
+          fetchReflection()
+        }}
+        userId={userId}
+        existingReflection={reflection}
+      />
+    )
+  }
+
+  if (!reflection || !reflection.structured_data) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 mb-8 text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
+          </button>
+
+          <div className="text-center py-20">
+            <h2 className="text-3xl font-bold mb-4">No reflection found</h2>
+            <p className="text-gray-400 mb-8">You haven't completed this lesson yet.</p>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 rounded-lg font-semibold transition-all"
+            >
+              Start This Lesson
+            </button>
           </div>
         </div>
-        
-        {/* Top Patterns */}
-        {topCategories.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Top Patterns Identified</h3>
-            <div className="space-y-2">
-              {topCategories.map(([category, count]) => (
-                <div key={category} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <span className="font-medium text-gray-900 dark:text-white">{category}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{count} problems</span>
+      </div>
+    )
+  }
+
+  const data = reflection.structured_data
+  const internalProblems = data.internalProblems || []
+  const externalProblems = data.externalProblems || []
+
+  // Group internal problems by category
+  const categorizedProblems = internalProblems.reduce((acc: any, problem: any) => {
+    const category = problem.category || 'Uncategorized'
+    if (!acc[category]) acc[category] = []
+    acc[category].push(problem)
+    return acc
+  }, {})
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-8">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
+          </button>
+
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+          >
+            <Edit className="w-5 h-5" />
+            Edit Reflection
+          </button>
+        </div>
+
+        {/* Lesson Info */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 text-sm text-gray-400 mb-2">
+            <Calendar className="w-4 h-4" />
+            <span>Day {lesson.day_number} • Week {lesson.week_number}</span>
+            <span>•</span>
+            <span>Completed {new Date(reflection.created_at).toLocaleDateString()}</span>
+          </div>
+          <h1 className="text-4xl font-bold mb-3">{lesson.title}</h1>
+          
+          {/* Rating Display */}
+          {data.feedbackRating && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Your rating:</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`w-5 h-5 ${
+                      star <= data.feedbackRating
+                        ? 'fill-yellow-400 text-yellow-400'
+                        : 'text-gray-600'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Statistics Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-gray-800 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-blue-400">
+              {internalProblems.length}
+            </div>
+            <div className="text-sm text-gray-400">Internal Problems</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-orange-400">
+              {externalProblems.length}
+            </div>
+            <div className="text-sm text-gray-400">External Problems</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-purple-400">
+              {Object.keys(categorizedProblems).length}
+            </div>
+            <div className="text-sm text-gray-400">Root Categories</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-green-400">
+              {internalProblems.filter((p: any) => p.category && p.category !== 'Unknown').length}
+            </div>
+            <div className="text-sm text-gray-400">Categorized</div>
+          </div>
+        </div>
+
+        {/* Internal Problems by Category */}
+        {internalProblems.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 mb-6">
+            <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+              <span className="text-blue-400">💭</span>
+              Internal Problems by Root Cause
+            </h2>
+            
+            {Object.entries(categorizedProblems).map(([category, problems]: [string, any]) => (
+              <div key={category} className="mb-6 last:mb-0">
+                <h3 className={`text-lg font-semibold mb-3 flex items-center gap-2 ${getCategoryColor(category)}`}>
+                  <span>{getCategoryIcon(category)}</span>
+                  {category}
+                  <span className="text-sm text-gray-400">({problems.length})</span>
+                </h3>
+                
+                <div className="space-y-2">
+                  {problems.map((problem: any, index: number) => (
+                    <div key={problem.id || index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="text-white">{problem.text}</div>
+                      {problem.subcategory && (
+                        <div className="text-sm text-gray-400 mt-2 flex items-center gap-2">
+                          <span>→</span>
+                          <span>{problem.subcategory}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* External Problems with Assessments */}
+        {externalProblems.length > 0 && (
+          <div className="bg-gray-800 rounded-xl p-6 mb-6">
+            <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+              <span className="text-orange-400">🌍</span>
+              External Problems Assessment
+            </h2>
+            
+            <div className="space-y-4">
+              {externalProblems.map((problem: any, index: number) => (
+                <div key={problem.id || index} className="bg-gray-700 rounded-lg p-4">
+                  <div className="text-white font-semibold mb-3">{problem.text}</div>
+                  
+                  {problem.assessment && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <span className="text-sm text-gray-400">Control Level:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 bg-gray-600 rounded-full h-2">
+                              <div 
+                                className="bg-blue-500 h-2 rounded-full"
+                                style={{ width: `${problem.assessment.control * 10}%` }}
+                              />
+                            </div>
+                            <span className="text-white text-sm">{problem.assessment.control}/10</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-sm text-gray-400">Impact Level:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 bg-gray-600 rounded-full h-2">
+                              <div 
+                                className="bg-orange-500 h-2 rounded-full"
+                                style={{ width: `${problem.assessment.impact * 10}%` }}
+                              />
+                            </div>
+                            <span className="text-white text-sm">{problem.assessment.impact}/10</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {problem.assessment.strategies && problem.assessment.strategies.length > 0 && (
+                        <div>
+                          <span className="text-sm text-gray-400">Strategies:</span>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {problem.assessment.strategies.map((strategy: string) => (
+                              <span key={strategy} className="px-3 py-1 bg-gray-600 rounded-full text-sm">
+                                {strategy}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
-        
-        {/* Problem Lists */}
-        <div className="space-y-4">
-          {internalProblems.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Internal Problems (💭)</h3>
-              <div className="space-y-1">
-                {internalProblems.map((problem: string, idx: number) => (
-                  <div key={idx} className="flex items-start space-x-2">
-                    <span className="text-blue-500 dark:text-blue-400 mt-1">•</span>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{problem}</p>
-                    {categories[`internal-${idx}`] && (
-                      <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-400">
-                        {categories[`internal-${idx}`]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {externalProblems.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">External Problems (🌍)</h3>
-              <div className="space-y-1">
-                {externalProblems.map((problem: string, idx: number) => (
-                  <div key={idx} className="flex items-start space-x-2">
-                    <span className="text-orange-500 dark:text-orange-400 mt-1">•</span>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{problem}</p>
-                    {categories[`external-${idx}`] && (
-                      <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-400">
-                        {categories[`external-${idx}`]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-  
-  // For Day 3 - Role identification
-  const renderDay3Summary = () => {
-    const roles = content.roles || []
-    const traits = content.traits || []
-    const values = content.values || []
-    
-    return (
-      <div className="space-y-6">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-4">
-            <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">Roles Identified</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-300">{roles.length}</p>
+
+        {/* Feedback Section */}
+        {data.feedbackText && (
+          <div className="bg-gray-800 rounded-xl p-6">
+            <h3 className="text-xl font-semibold mb-3">Your Feedback</h3>
+            <p className="text-gray-300">{data.feedbackText}</p>
           </div>
-          <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-4">
-            <p className="text-sm text-green-600 dark:text-green-400 font-medium">Core Traits</p>
-            <p className="text-2xl font-bold text-green-900 dark:text-green-300">{traits.length}</p>
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4">
-            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">Values</p>
-            <p className="text-2xl font-bold text-blue-900 dark:text-blue-300">{values.length}</p>
-          </div>
-        </div>
-        
-        {/* Lists */}
-        <div className="space-y-4">
-          {roles.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Roles You've Been Playing</h3>
-              <div className="flex flex-wrap gap-2">
-                {roles.map((role: any, idx: number) => (
-                  <span key={idx} className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-full text-sm">
-                    {role.name || role}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {traits.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your True Traits</h3>
-              <div className="flex flex-wrap gap-2">
-                {traits.map((trait: string, idx: number) => (
-                  <span key={idx} className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm">
-                    {trait}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {values.length > 0 && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Core Values</h3>
-              <div className="flex flex-wrap gap-2">
-                {values.map((value: string, idx: number) => (
-                  <span key={idx} className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-sm">
-                    {value}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-  
-  // For standard lessons
-  const renderStandardSummary = () => {
-    const responses = content.responses || content.reflections || {}
-    
-    return (
-      <div className="space-y-4">
-        {Object.entries(responses).map(([prompt, response]: [string, any], idx) => (
-          <div key={idx} className="space-y-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{prompt}</p>
-            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{response}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
-  
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={onBack}
-            className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dashboard</span>
-          </button>
-          
-          <button
-            onClick={onEdit}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Edit3 className="w-4 h-4" />
-            <span>Edit Exercise</span>
-          </button>
-        </div>
-        
-        {/* Main Content */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
-          {/* Lesson Header */}
-          <div className="p-6 border-b border-gray-200 dark:border-gray-800">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Day {lesson.day_number}</span>
-                  <span className="text-sm text-gray-300 dark:text-gray-600">•</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Week {lesson.week_number}</span>
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{lesson.title}</h1>
-                <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center space-x-1">
-                    <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
-                    <span>Completed</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>{new Date(reflection?.completed_at || reflection?.created_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Summary Content */}
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Results</h2>
-            
-            {lesson.day_number === 1 && renderDay1Summary()}
-            {lesson.day_number === 3 && renderDay3Summary()}
-            {![1, 3].includes(lesson.day_number) && renderStandardSummary()}
-            
-            {/* AI Summary if available */}
-            {content.aiSummary && (
-              <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center space-x-2 mb-2">
-                  <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300">AI Insights</h3>
-                </div>
-                <p className="text-sm text-blue-800 dark:text-blue-400">{content.aiSummary}</p>
-              </div>
-            )}
-            
-            {/* Notes section */}
-            {content.notes && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Notes</h3>
-                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{content.notes}</p>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Action Footer */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-xl">
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-              Want to add more insights or update your responses? 
-              <button onClick={onEdit} className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
-                Edit this exercise
-              </button>
-            </p>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )

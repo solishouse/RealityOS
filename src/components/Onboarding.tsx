@@ -2,35 +2,30 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
-import { ChevronRight, Target, User as UserIcon, Sparkles } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Sparkles, Target, ArrowRight, Check } from 'lucide-react'
+import content from '@/content/staticContent'
 
-interface OnboardingProps {
+interface Props {
   user: User
   onComplete: () => void
 }
 
-export default function Onboarding({ user, onComplete }: OnboardingProps) {
+export default function Onboarding({ user, onComplete }: Props) {
   const [step, setStep] = useState(1)
   const [firstName, setFirstName] = useState('')
   const [goal, setGoal] = useState('')
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const exampleGoals = [
-    "Break free from self-limiting patterns",
-    "Build unshakeable confidence",
-    "Create the life I've been dreaming about",
-    "Stop self-sabotage and follow through",
-    "Align my actions with my true values",
-    "Develop mental clarity and focus"
-  ]
+  // Get onboarding content from static import
+  const onboardingContent = content.onboarding
 
   const handleComplete = async () => {
     if (step === 1) {
       if (!firstName.trim()) {
-        setError('Please enter your first name')
+        setError(onboardingContent.errors.nameRequired)
         return
       }
       setError('')
@@ -40,14 +35,13 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
 
     if (step === 2) {
       if (!goal.trim()) {
-        setError('Please share what you hope to achieve')
+        setError(onboardingContent.errors.goalRequired)
         return
       }
       setError('')
       setSaving(true)
 
       try {
-        // Create or update profile
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -67,61 +61,57 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
         onComplete()
       } catch (err) {
         console.error('Error saving profile:', err)
-        setError('Failed to save your information. Please try again.')
+        setError(onboardingContent.errors.saveFailed)
         setSaving(false)
       }
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center px-4">
       <div className="max-w-lg w-full">
-        {/* Progress indicator */}
+        {/* Progress Steps */}
         <div className="flex items-center justify-center mb-8">
           <div className="flex items-center space-x-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+              step >= 1 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-700 text-gray-400'
             }`}>
-              1
+              {step > 1 ? <Check className="w-4 h-4" /> : '1'}
             </div>
-            <div className={`w-16 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
+            <div className={`w-20 h-1 ${step >= 2 ? 'bg-blue-500' : 'bg-gray-700'}`} />
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+              step >= 2 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-700 text-gray-400'
             }`}>
               2
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
-            <div className="flex items-center justify-center mb-3">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                {step === 1 ? (
-                  <UserIcon className="w-8 h-8 text-white" />
-                ) : (
-                  <Target className="w-8 h-8 text-white" />
-                )}
+        {/* Step Content */}
+        <div className="bg-gray-800 rounded-2xl shadow-2xl p-8">
+          {step === 1 ? (
+            <>
+              {/* Step 1: Name */}
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-8 h-8 text-white" />
+                </div>
+                <h1 className="text-3xl font-bold text-white mb-2">
+                  {onboardingContent.headers.title}
+                </h1>
+                <p className="text-gray-400">
+                  {onboardingContent.headers.subtitle}
+                </p>
               </div>
-            </div>
-            <h1 className="text-2xl font-bold text-center">
-              {step === 1 ? 'Welcome to RealityOS!' : 'Set Your Intention'}
-            </h1>
-            <p className="text-center text-white/80 mt-2">
-              {step === 1 
-                ? "Let's personalize your journey" 
-                : "What transformation are you seeking?"}
-            </p>
-          </div>
 
-          {/* Content */}
-          <div className="p-6">
-            {step === 1 ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    What should we call you?
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {onboardingContent.steps.name.label}
                   </label>
                   <input
                     type="text"
@@ -130,20 +120,35 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                       setFirstName(e.target.value)
                       setError('')
                     }}
-                    placeholder="Enter your first name"
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    placeholder={onboardingContent.steps.name.placeholder}
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     autoFocus
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    This is how we'll address you throughout the program
+                  <p className="text-xs text-gray-500 mt-1">
+                    {onboardingContent.steps.name.helper}
                   </p>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
+            </>
+          ) : (
+            <>
+              {/* Step 2: Goal */}
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-8 h-8 text-white" />
+                </div>
+                <h1 className="text-3xl font-bold text-white mb-2">
+                  {onboardingContent.headers.titleStep2}
+                </h1>
+                <p className="text-gray-400">
+                  {onboardingContent.headers.subtitleStep2}
+                </p>
+              </div>
+
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    What do you hope to achieve with RealityOS?
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {onboardingContent.steps.goal.label}
                   </label>
                   <textarea
                     value={goal}
@@ -151,73 +156,78 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                       setGoal(e.target.value)
                       setError('')
                     }}
-                    placeholder="Describe your goal or the change you're seeking..."
+                    placeholder={onboardingContent.steps.goal.placeholder}
                     rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent resize-none"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     autoFocus
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    This will be your north star throughout the 28-day journey
+                  <p className="text-xs text-gray-500 mt-1">
+                    {onboardingContent.steps.goal.helper}
                   </p>
                 </div>
 
-                {/* Example goals for inspiration */}
+                {/* Example Goals */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Need inspiration? Here are some examples:
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {onboardingContent.examples.title}
                   </p>
-                  <div className="space-y-2">
-                    {exampleGoals.map((example, idx) => (
+                  <div className="grid gap-2">
+                    {onboardingContent.examples.goals.map((example: string, idx: number) => (
                       <button
                         key={idx}
                         onClick={() => setGoal(example)}
-                        className="w-full text-left px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        className="text-left px-3 py-2 text-sm text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
                       >
-                        <Sparkles className="w-3 h-3 inline mr-2 text-gray-400 dark:text-gray-500" />
+                        <Sparkles className="w-3 h-3 inline mr-2 text-gray-500" />
                         {example}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
-            )}
+            </>
+          )}
 
-            {/* Error message */}
-            {error && (
-              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              </div>
-            )}
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 p-3 bg-red-900/20 border border-red-800 rounded-lg">
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
 
-            {/* Action button */}
+          {/* Action Buttons */}
+          <div className="mt-8 flex gap-3">
+            {step === 2 && (
+              <button
+                onClick={() => setStep(1)}
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors"
+              >
+                Back
+              </button>
+            )}
+            
             <button
               onClick={handleComplete}
               disabled={saving}
-              className="mt-6 w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium rounded-lg transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>{saving ? 'Setting up...' : step === 1 ? 'Continue' : 'Start Your Journey'}</span>
-              {!saving && <ChevronRight className="w-4 h-4" />}
+              <span>
+                {saving 
+                  ? 'Setting up...' 
+                  : step === 1 
+                  ? onboardingContent.buttons.continue 
+                  : onboardingContent.buttons.startJourney
+                }
+              </span>
+              {!saving && <ArrowRight className="w-4 h-4" />}
             </button>
-
-            {/* Skip option for step 2 */}
-            {step === 2 && !saving && (
-              <button
-                onClick={() => {
-                  setGoal("Transform my life")
-                  handleComplete()
-                }}
-                className="mt-2 w-full py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                Skip for now (you can add this later)
-              </button>
-            )}
           </div>
-        </div>
 
-        {/* Bottom text */}
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-          Your 28-day transformation begins now
-        </p>
+          {/* Footer */}
+          <p className="text-center text-xs text-gray-500 mt-6">
+            {onboardingContent.footer}
+          </p>
+        </div>
       </div>
     </div>
   )

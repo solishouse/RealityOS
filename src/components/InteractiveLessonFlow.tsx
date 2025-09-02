@@ -1,87 +1,47 @@
-// src/components/InteractiveLessonFlow.tsx - DARK MODE UPDATED VERSION
+// src/components/InteractiveLessonFlow.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, X, AlertCircle, Sparkles, Home } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { ArrowLeft, ChevronRight, Home, X, Edit2, Plus, Star, ChevronDown, ChevronUp } from 'lucide-react'
 import ExternalProblemAssessment from './ExternalProblemAssessment'
+import content from '@/content/staticContent'
 
-// Types
+// Type definitions
 interface InternalProblem {
   id: string
   text: string
   category?: string
   subcategory?: string
-  linkedExternalIds?: string[]
 }
 
 interface ExternalProblem {
   id: string
   text: string
-  linkedInternalIds: string[]
   assessment?: {
-    whatBothers: string
-    howItFeels: string
-    storyTelling: string
-    contributing?: string
+    control: number
+    impact: number
+    strategies: string[]
   }
 }
 
-// Root categories with subcategories
-const rootCategories = {
-  conditioning: {
-    name: "Conditioning & External Pressure",
-    color: "bg-red-500 dark:bg-red-600",
-    description: "Default habits or norms you absorbed, not chose",
-    subcategories: [
-      { id: "cultural_norms", name: "Cultural norms", description: "What your culture teaches is 'normal' or 'right'" },
-      { id: "external_pressure", name: "External pressure", description: "Expectations from others or society" },
-      { id: "authority_influence", name: "Authority or family influence", description: "Expectations from parents, teachers, or power figures" },
-      { id: "systems", name: "Systems you were raised in", description: "Environments that shaped how safe or free you felt" }
-    ]
-  },
-  mind: {
-    name: "The Mind",
-    color: "bg-blue-500 dark:bg-blue-600",
-    description: "Mental patterns and thought loops",
-    subcategories: [
-      { id: "fear", name: "Fear", description: "Avoidance or control driven by threat" },
-      { id: "insecurity", name: "Insecurity", description: "Low self-trust or self-worth" },
-      { id: "ego", name: "Ego", description: "Attachment to identity or being right" },
-      { id: "limiting_beliefs", name: "Limiting beliefs", description: "Stories that limit what you think is possible" }
-    ]
-  },
-  emotional: {
-    name: "Emotional Residue & Survival",
-    color: "bg-purple-500 dark:bg-purple-600",
-    description: "Unprocessed emotions and protective patterns",
-    subcategories: [
-      { id: "unmet_needs", name: "Unmet needs", description: "Emotional or physical needs that were ignored" },
-      { id: "trauma_patterns", name: "Trauma patterns", description: "Responses rooted in past stress or harm" },
-      { id: "disconnection", name: "Disconnection", description: "Feeling numb or cut off from yourself/others" },
-      { id: "avoidance", name: "Avoidance", description: "Escaping discomfort through distraction" },
-      { id: "burnout", name: "Burnout", description: "Depletion from chronic strain" }
-    ]
-  },
-  unknown: {
-    name: "Unknown",
-    color: "bg-yellow-500 dark:bg-yellow-600",
-    description: "Unclear or out of your control",
-    subcategories: [
-      { id: "unclear", name: "Unclear source", description: "Not sure where this comes from yet" }
-    ]
-  }
+interface Props {
+  lesson: any
+  onComplete: () => void
+  userId: string
+  existingReflection?: any
 }
 
 export default function InteractiveLessonFlow({ 
   lesson,
   onComplete,
-  userId 
-}: {
-  lesson: any
-  onComplete: () => void
-  userId: string
-}) {
+  userId,
+  existingReflection 
+}: Props) {
+  // Get content directly from static import
+  const day1Content = content.day1
+  
+  // Initialize state
   const [currentStage, setCurrentStage] = useState(0)
   const [internalProblems, setInternalProblems] = useState<InternalProblem[]>([])
   const [externalProblems, setExternalProblems] = useState<ExternalProblem[]>([])
@@ -92,497 +52,846 @@ export default function InteractiveLessonFlow({
   const [feedbackText, setFeedbackText] = useState("")
   const [feedbackRating, setFeedbackRating] = useState(0)
   const [currentExternalIndex, setCurrentExternalIndex] = useState(0)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
+  const [editingProblemId, setEditingProblemId] = useState<string | null>(null)
+  const [editingProblemText, setEditingProblemText] = useState("")
+  const [currentCategorizingIndex, setCurrentCategorizingIndex] = useState(0)
+  const [showIntro, setShowIntro] = useState(true)
 
-  async function saveReflection(data: any) {
+  // Load existing data if editing
+  useEffect(() => {
+    if (existingReflection?.structured_data) {
+      console.log('Loading existing reflection data:', existingReflection.structured_data)
+      const data = existingReflection.structured_data
+      
+      if (data.internalProblems) {
+        setInternalProblems(data.internalProblems)
+      }
+      if (data.externalProblems) {
+        setExternalProblems(data.externalProblems)
+      }
+      if (data.feedbackRating) {
+        setFeedbackRating(data.feedbackRating)
+      }
+      if (data.feedbackText) {
+        setFeedbackText(data.feedbackText)
+      }
+      
+      setIsEditMode(true)
+      setShowIntro(false) // Skip intro when editing
+      setCurrentStage(3) // Start at summary stage if editing
+    }
+  }, [existingReflection])
+
+  // Function to add problem
+  function addProblem() {
+    if (currentProblem.trim()) {
+      const newProblem = {
+        id: Date.now().toString(),
+        text: currentProblem.trim()
+      }
+      
+      if (problemType === 'internal') {
+        setInternalProblems([...internalProblems, newProblem])
+      } else {
+        setExternalProblems([...externalProblems, newProblem])
+      }
+      
+      setCurrentProblem("")
+      setHasChanges(true)
+    }
+  }
+
+  // Function to delete problem
+  function deleteProblem(id: string, type: 'internal' | 'external') {
+    if (type === 'internal') {
+      setInternalProblems(internalProblems.filter(p => p.id !== id))
+    } else {
+      setExternalProblems(externalProblems.filter(p => p.id !== id))
+    }
+    setHasChanges(true)
+  }
+
+  // Function to start editing a problem
+  function startEditingProblem(id: string, text: string) {
+    setEditingProblemId(id)
+    setEditingProblemText(text)
+  }
+
+  // Function to save edited problem
+  function saveEditedProblem(id: string, type: 'internal' | 'external') {
+    if (type === 'internal') {
+      setInternalProblems(internalProblems.map(p => 
+        p.id === id ? { ...p, text: editingProblemText } : p
+      ))
+    } else {
+      setExternalProblems(externalProblems.map(p => 
+        p.id === id ? { ...p, text: editingProblemText } : p
+      ))
+    }
+    setEditingProblemId(null)
+    setEditingProblemText("")
+    setHasChanges(true)
+  }
+
+  // Function to categorize internal problem
+  function categorizeInternalProblem(category: string, subcategory?: string) {
+    const updatedProblems = [...internalProblems]
+    updatedProblems[currentCategorizingIndex] = {
+      ...updatedProblems[currentCategorizingIndex],
+      category,
+      subcategory
+    }
+    setInternalProblems(updatedProblems)
+    setHasChanges(true)
+
+    // Move to next problem or complete
+    if (currentCategorizingIndex < internalProblems.length - 1) {
+      setCurrentCategorizingIndex(currentCategorizingIndex + 1)
+    } else {
+      // Move to external problems or summary
+      if (externalProblems.length > 0) {
+        setCurrentStage(2)
+        setCurrentExternalIndex(0)
+      } else {
+        setCurrentStage(3)
+      }
+    }
+  }
+
+  // Function to handle external problem assessment
+  function handleExternalAssessment(assessment: any) {
+    const updatedProblems = [...externalProblems]
+    updatedProblems[currentExternalIndex] = {
+      ...updatedProblems[currentExternalIndex],
+      assessment
+    }
+    setExternalProblems(updatedProblems)
+    setHasChanges(true)
+
+    // Move to next external problem or complete
+    if (currentExternalIndex < externalProblems.length - 1) {
+      setCurrentExternalIndex(currentExternalIndex + 1)
+    } else {
+      setCurrentStage(3)
+    }
+  }
+
+  // Function to save reflection
+  async function saveReflection(complete: boolean = false) {
     setSaving(true)
-    try {
-      await supabase.from('reflections').upsert({
-        user_id: userId,
-        lesson_id: lesson.id,
-        structured_data: data,
-        completed_at: new Date().toISOString(),
-      })
+    
+    const structuredData = {
+      internalProblems,
+      externalProblems,
+      feedbackRating,
+      feedbackText,
+      completedAt: complete ? new Date().toISOString() : null
+    }
 
-      if (feedbackRating > 0 || feedbackText) {
-        await supabase.from('feedback').insert({
-          user_id: userId,
-          lesson_id: lesson.id,
-          rating: feedbackRating,
-          feedback_text: feedbackText,
-          feedback_type: 'lesson'
-        })
+    try {
+      if (isEditMode && existingReflection) {
+        // Update existing reflection
+        const { error } = await supabase
+          .from('reflections')
+          .update({
+            structured_data: structuredData,
+            completed: complete,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingReflection.id)
+
+        if (error) throw error
+      } else {
+        // Create new reflection
+        const { error } = await supabase
+          .from('reflections')
+          .insert([{
+            user_id: userId,
+            lesson_id: lesson.id,
+            structured_data: structuredData,
+            completed: complete,
+            created_at: new Date().toISOString()
+          }])
+
+        if (error) throw error
       }
 
-      await supabase
-        .from('profiles')
-        .update({ 
-          current_day: lesson.day_number + 1,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-
-      setShowCelebration(true)
-      setTimeout(() => {
-        onComplete()
-      }, 3000)
+      if (complete) {
+        setShowCelebration(true)
+        setTimeout(() => {
+          onComplete()
+        }, 3000)
+      }
     } catch (error) {
-      console.error('Error saving:', error)
+      console.error('Error saving reflection:', error)
     } finally {
       setSaving(false)
     }
   }
 
-  // Day 1 Flow
-  if (lesson.day_number === 1) {
+  // Get step count
+  const getTotalSteps = () => {
+    if (externalProblems.length > 0) return 4
+    return 3
+  }
+
+  // Render intro screen
+  if (showIntro && !isEditMode) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8 relative">
+        <button 
+          onClick={onComplete}
+          className="absolute top-8 right-8 flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+        >
+          <Home className="w-5 h-5" />
+          DASHBOARD
+        </button>
+
+        <div className="max-w-2xl mx-auto mt-20">
+          <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            {day1Content.title}
+          </h1>
+          
+          <p className="text-xl text-gray-300 mb-8">
+            {day1Content.intro.description}
+          </p>
+
+          <div className="bg-gray-800 rounded-xl p-6 mb-8">
+            <h2 className="text-2xl font-semibold mb-4">What you'll do today:</h2>
+            <ul className="space-y-3">
+              {day1Content.intro.objectives.map((objective: string, index: number) => (
+                <li key={index} className="flex items-start gap-3">
+                  <span className="text-blue-400 mt-1">✓</span>
+                  <span className="text-gray-300">{objective}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <button
+            onClick={() => setShowIntro(false)}
+            className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 rounded-lg font-semibold text-lg transition-all transform hover:scale-[1.02]"
+          >
+            {day1Content.buttons.start}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Render based on current stage
+  if (currentStage === 0) {
     // Stage 0: Problem Collection
-    if (currentStage === 0) {
-      return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white p-4">
-          <div className="max-w-3xl mx-auto">
-            {/* Navigation */}
-            <div className="flex justify-between items-center mb-6">
-              <button
-                onClick={onComplete}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2"
-              >
-                <Home className="w-4 h-4" />
-                <span className="font-mono text-sm">DASHBOARD</span>
-              </button>
-              <div className="text-gray-500 dark:text-gray-500 font-mono text-sm">
-                DAY 1 • STEP 1 OF {externalProblems.length > 0 ? '4' : '3'}
-              </div>
-            </div>
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8 relative">
+        <div className="absolute top-8 right-8 flex gap-4">
+          <button 
+            onClick={() => setShowIntro(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            BACK
+          </button>
+          <button 
+            onClick={onComplete}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Home className="w-5 h-5" />
+            DASHBOARD
+          </button>
+        </div>
 
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-4">Lay everything out</h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Let's get real about what's weighing on you. Include both your internal experiences 
-                (thoughts, feelings, patterns) and external situations (circumstances, people, events).
-              </p>
-            </div>
+        <div className="max-w-3xl mx-auto mt-16">
+          <div className="text-sm text-gray-400 mb-4">STEP 1 OF {getTotalSteps()}</div>
+          
+          <h1 className="text-4xl font-bold mb-6">
+            {day1Content.problemCollection.title}
+          </h1>
+          
+          <p className="text-xl text-gray-300 mb-8">
+            {day1Content.problemCollection.description}
+          </p>
 
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 mb-6">
-              {/* Segmented Control */}
-              <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex mb-6">
-                <button
-                  onClick={() => setProblemType('internal')}
-                  className={`flex-1 py-2 px-4 rounded transition-all font-mono text-sm ${
-                    problemType === 'internal'
-                      ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  💭 INTERNAL
-                </button>
-                <button
-                  onClick={() => setProblemType('external')}
-                  className={`flex-1 py-2 px-4 rounded transition-all font-mono text-sm ${
-                    problemType === 'external'
-                      ? 'bg-orange-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  🌍 EXTERNAL
-                </button>
-              </div>
-
-              {/* Helper text */}
-              <div className={`mb-4 p-3 rounded-lg text-sm ${
-                problemType === 'internal' 
-                  ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                  : 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
-              }`}>
-                {problemType === 'internal' 
-                  ? "Your thoughts, feelings, behaviors, or patterns that feel off"
-                  : "External circumstances, situations, or people affecting you"}
-              </div>
-
-              {/* Input */}
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={currentProblem}
-                  onChange={(e) => setCurrentProblem(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && currentProblem.trim()) {
-                      if (problemType === 'internal') {
-                        setInternalProblems([...internalProblems, { 
-                          id: Date.now().toString(), 
-                          text: currentProblem.trim()
-                        }])
-                      } else {
-                        setExternalProblems([...externalProblems, { 
-                          id: Date.now().toString(), 
-                          text: currentProblem.trim(),
-                          linkedInternalIds: []
-                        }])
-                      }
-                      setCurrentProblem("")
-                    }
-                  }}
-                  placeholder={problemType === 'internal' 
-                    ? "e.g., 'I feel anxious about work' or 'I procrastinate on important tasks'"
-                    : "e.g., 'My boss constantly criticizes me' or 'Too many responsibilities at home'"
-                  }
-                  className="flex-1 bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded px-4 py-3 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400 transition-colors"
-                />
-                <button
-                  onClick={() => {
-                    if (currentProblem.trim()) {
-                      if (problemType === 'internal') {
-                        setInternalProblems([...internalProblems, { 
-                          id: Date.now().toString(), 
-                          text: currentProblem.trim()
-                        }])
-                      } else {
-                        setExternalProblems([...externalProblems, { 
-                          id: Date.now().toString(), 
-                          text: currentProblem.trim(),
-                          linkedInternalIds: []
-                        }])
-                      }
-                      setCurrentProblem("")
-                    }
-                  }}
-                  disabled={!currentProblem.trim()}
-                  className="bg-cyan-500 text-black px-6 py-3 rounded font-mono font-bold hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  ADD
-                </button>
-              </div>
-
-              {/* Problems Lists */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Internal Problems */}
-                <div>
-                  <h3 className="text-sm font-mono text-blue-600 dark:text-blue-400 mb-2">
-                    INTERNAL ({internalProblems.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {internalProblems.map((problem) => (
-                      <div key={problem.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2">
-                        <span className="text-blue-500 dark:text-blue-400 text-xs">💭</span>
-                        <span className="flex-1 text-sm">{problem.text}</span>
-                        <button
-                          onClick={() => setInternalProblems(internalProblems.filter(p => p.id !== problem.id))}
-                          className="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {internalProblems.length === 0 && (
-                      <p className="text-gray-500 dark:text-gray-600 text-sm">No internal problems added yet</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* External Problems */}
-                <div>
-                  <h3 className="text-sm font-mono text-orange-600 dark:text-orange-400 mb-2">
-                    EXTERNAL ({externalProblems.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {externalProblems.map((problem) => (
-                      <div key={problem.id} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2">
-                        <span className="text-orange-500 dark:text-orange-400 text-xs">🌍</span>
-                        <span className="flex-1 text-sm">{problem.text}</span>
-                        <button
-                          onClick={() => setExternalProblems(externalProblems.filter(p => p.id !== problem.id))}
-                          className="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {externalProblems.length === 0 && (
-                      <p className="text-gray-500 dark:text-gray-600 text-sm">No external problems added yet</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          {/* Problem Type Toggle */}
+          <div className="flex gap-2 mb-6 bg-gray-800 rounded-lg p-1">
             <button
-              onClick={() => setCurrentStage(1)}
-              disabled={internalProblems.length < 2}
-              className="w-full bg-cyan-500 text-black font-mono font-bold py-4 rounded hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              onClick={() => setProblemType('internal')}
+              className={`flex-1 py-3 px-4 rounded-md transition-all ${
+                problemType === 'internal' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
             >
-              {internalProblems.length < 2 
-                ? `ADD AT LEAST ${2 - internalProblems.length} MORE INTERNAL PROBLEMS` 
-                : 'CONTINUE TO CATEGORIZE'}
-              <ChevronRight className="w-5 h-5" />
+              💭 Internal Problems ({internalProblems.length})
+            </button>
+            <button
+              onClick={() => setProblemType('external')}
+              className={`flex-1 py-3 px-4 rounded-md transition-all ${
+                problemType === 'external' 
+                  ? 'bg-orange-500 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              🌍 External Problems ({externalProblems.length})
             </button>
           </div>
-        </div>
-      )
-    }
-    
-    // Stage 1: Categorize Internal Problems
-    else if (currentStage === 1) {
-      const uncategorizedProblems = internalProblems.filter(p => !p.category)
-      const currentProblemToTag = uncategorizedProblems[0]
 
-      if (!currentProblemToTag) {
-        // All internal problems categorized
-        if (externalProblems.length > 0) {
-          setCurrentStage(2)
-          setCurrentExternalIndex(0)
-          return null
-        } else {
-          setCurrentStage(3)
-          return null
-        }
-      }
-
-      return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white p-4">
-          <div className="max-w-3xl mx-auto">
-            {/* Navigation and progress */}
-            <div className="flex justify-between items-center mb-6">
+          {/* Input Area */}
+          <div className="bg-gray-800 rounded-xl p-6 mb-6">
+            <label className="block text-sm text-gray-400 mb-2">
+              Add a {problemType} problem:
+            </label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={currentProblem}
+                onChange={(e) => setCurrentProblem(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addProblem()}
+                placeholder={problemType === 'internal' 
+                  ? day1Content.problemCollection.internalPlaceholder
+                  : day1Content.problemCollection.externalPlaceholder
+                }
+                className="flex-1 px-4 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
               <button
-                onClick={() => setCurrentStage(0)}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2"
+                onClick={addProblem}
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
               >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="font-mono text-sm">BACK</span>
+                <Plus className="w-5 h-5" />
               </button>
-              <div className="text-gray-500 dark:text-gray-500 font-mono text-sm">
-                CATEGORIZING {internalProblems.length - uncategorizedProblems.length + 1} OF {internalProblems.length}
-              </div>
             </div>
-
-            <div className="mb-4">
-              <div className="bg-gray-200 dark:bg-gray-800 rounded-full h-2">
-                <div 
-                  className="bg-cyan-500 h-2 rounded-full transition-all"
-                  style={{ width: `${((internalProblems.length - uncategorizedProblems.length) / internalProblems.length) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-bold mb-2">Where does this come from?</h2>
-              <div className="bg-gray-50 dark:bg-gray-950 border border-blue-200 dark:border-blue-800 rounded p-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-blue-500 dark:text-blue-400">💭</span>
-                  <p className="text-lg">{currentProblemToTag.text}</p>
-                </div>
-              </div>
-
-              {/* Category options */}
-              <div className="space-y-6">
-                {Object.entries(rootCategories).map(([key, category]) => (
-                  <div key={key}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className={`${category.color} w-4 h-4 rounded`} />
-                      <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-400">{category.name}</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-6">
-                      {category.subcategories.map(sub => (
-                        <button
-                          key={sub.id}
-                          onClick={() => {
-                            const updatedProblems = internalProblems.map(p => 
-                              p.id === currentProblemToTag.id 
-                                ? { ...p, category: key, subcategory: sub.id }
-                                : p
-                            )
-                            setInternalProblems(updatedProblems)
-                          }}
-                          className="text-left p-3 border border-gray-300 dark:border-gray-700 rounded-lg hover:border-cyan-500 dark:hover:border-cyan-400 transition-colors"
-                        >
-                          <div className="font-semibold text-sm mb-1">{sub.name}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-500">{sub.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+            
+            {/* Examples */}
+            <div className="mt-4 text-sm text-gray-400">
+              <span className="font-semibold">Examples:</span>
+              <div className="mt-2 space-y-1">
+                {(problemType === 'internal' 
+                  ? day1Content.problemCollection.internalExamples 
+                  : day1Content.problemCollection.externalExamples
+                ).map((example: string, index: number) => (
+                  <div key={index}>• {example}</div>
                 ))}
               </div>
             </div>
           </div>
-        </div>
-      )
-    }
-    
-    // Stage 2: External Problem Assessment
-    else if (currentStage === 2) {
-      if (currentExternalIndex >= externalProblems.length) {
-        setCurrentStage(3)
-        return null
-      }
 
-      return (
-        <ExternalProblemAssessment
-          externalProblems={externalProblems}
-          internalProblems={internalProblems}
-          currentIndex={currentExternalIndex}
-          onComplete={(updatedExternal, updatedInternals) => {
-            const updatedExternals = externalProblems.map(p => 
-              p.id === updatedExternal.id ? updatedExternal : p
-            )
-            setExternalProblems(updatedExternals)
-            setInternalProblems(updatedInternals)
-            
-            if (currentExternalIndex < externalProblems.length - 1) {
-              setCurrentExternalIndex(currentExternalIndex + 1)
-            } else {
-              setCurrentStage(3)
-            }
-          }}
-          onBack={() => {
-            if (currentExternalIndex > 0) {
-              setCurrentExternalIndex(currentExternalIndex - 1)
-            } else {
-              setCurrentStage(1)
-            }
-          }}
-        />
-      )
-    }
-    
-    // Stage 3: Summary
-    else if (currentStage === 3) {
-      if (showCelebration) {
-        return (
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white flex items-center justify-center p-4">
-            <div className="text-center animate-fadeIn">
-              <Sparkles className="w-20 h-20 text-yellow-500 mx-auto mb-6 animate-pulse" />
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent">
-                Day 1 Complete!
-              </h1>
-              <p className="text-xl text-gray-600 dark:text-gray-400">You've mapped your inner and outer landscape...</p>
-            </div>
-          </div>
-        )
-      }
-
-      return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white p-4">
-          <div className="max-w-5xl mx-auto">
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-4">
-                <Sparkles className="w-8 h-8 text-yellow-500" />
-                <h1 className="text-3xl font-bold">Your complete problem landscape</h1>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400">
-                You've mapped how external situations trigger internal experiences. This awareness is powerful.
-              </p>
-            </div>
-
-            {/* Insights */}
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-bold mb-4 text-purple-700 dark:text-purple-300">Key Insights:</h2>
-              <div className="space-y-3 text-gray-700 dark:text-gray-300">
-                <p>✓ You identified <span className="text-blue-600 dark:text-blue-400 font-bold">{internalProblems.length} internal patterns</span> affecting you</p>
-                <p>✓ You recognized <span className="text-orange-600 dark:text-orange-400 font-bold">{externalProblems.length} external triggers</span> in your environment</p>
-                {externalProblems.filter(e => e.linkedInternalIds.length > 2).length > 0 && (
-                  <p>✓ Some external situations trigger <span className="text-yellow-600 dark:text-yellow-400 font-bold">multiple internal responses</span></p>
+          {/* Problem Lists */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {/* Internal Problems */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-blue-400">
+                💭 Internal Problems ({internalProblems.length})
+              </h3>
+              <div className="space-y-2">
+                {internalProblems.map((problem) => (
+                  <div key={problem.id} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between group">
+                    {editingProblemId === problem.id ? (
+                      <input
+                        type="text"
+                        value={editingProblemText}
+                        onChange={(e) => setEditingProblemText(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && saveEditedProblem(problem.id, 'internal')}
+                        onBlur={() => saveEditedProblem(problem.id, 'internal')}
+                        className="flex-1 bg-gray-700 px-3 py-1 rounded"
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <span className="text-gray-300">{problem.text}</span>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => startEditingProblem(problem.id, problem.text)}
+                            className="text-gray-400 hover:text-white"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteProblem(problem.id, 'internal')}
+                            className="text-gray-400 hover:text-red-400"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {internalProblems.length === 0 && (
+                  <p className="text-gray-500 italic">No internal problems added yet</p>
                 )}
               </div>
             </div>
 
-            {/* Problems Display */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {Object.entries(rootCategories).map(([key, category]) => {
-                const categoryProblems = internalProblems.filter(p => p.category === key)
-                if (categoryProblems.length === 0) return null
-                
-                return (
-                  <div key={key} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                    <div className={`${category.color} text-white dark:text-black px-3 py-1 rounded text-sm font-bold mb-3 inline-block`}>
-                      {category.name} ({categoryProblems.length})
-                    </div>
-                    <div className="space-y-3">
-                      {categoryProblems.map(problem => {
-                        const linkedExternals = externalProblems.filter(e => 
-                          e.linkedInternalIds.includes(problem.id)
-                        )
-                        return (
-                          <div key={problem.id} className="border-l-2 border-gray-300 dark:border-gray-700 pl-3">
-                            <div className="flex items-start gap-2">
-                              <span className="text-blue-500 dark:text-blue-400 text-xs mt-1">💭</span>
-                              <div className="flex-1">
-                                <p className="text-sm">{problem.text}</p>
-                                {linkedExternals.length > 0 && (
-                                  <div className="mt-2 space-y-2">
-                                    <p className="text-xs text-gray-600 dark:text-gray-500">Triggered by:</p>
-                                    {linkedExternals.map(external => (
-                                      <div key={external.id} className="ml-2 p-2 bg-orange-50 dark:bg-orange-950/20 rounded">
-                                        <div className="flex items-start gap-2">
-                                          <span className="text-orange-500 dark:text-orange-400 text-xs">🌍</span>
-                                          <div className="flex-1">
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">{external.text}</p>
-                                            {external.assessment && (
-                                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                                                <p>• Feels: {external.assessment.howItFeels}</p>
-                                                <p>• Story: {external.assessment.storyTelling}</p>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
+            {/* External Problems */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-orange-400">
+                🌍 External Problems ({externalProblems.length})
+              </h3>
+              <div className="space-y-2">
+                {externalProblems.map((problem) => (
+                  <div key={problem.id} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between group">
+                    {editingProblemId === problem.id ? (
+                      <input
+                        type="text"
+                        value={editingProblemText}
+                        onChange={(e) => setEditingProblemText(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && saveEditedProblem(problem.id, 'external')}
+                        onBlur={() => saveEditedProblem(problem.id, 'external')}
+                        className="flex-1 bg-gray-700 px-3 py-1 rounded"
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <span className="text-gray-300">{problem.text}</span>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => startEditingProblem(problem.id, problem.text)}
+                            className="text-gray-400 hover:text-white"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteProblem(problem.id, 'external')}
+                            className="text-gray-400 hover:text-red-400"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-
-            {/* Feedback */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-bold mb-4">How was this exercise?</h3>
-              
-              <div className="flex gap-2 mb-4">
-                {[1, 2, 3, 4, 5].map(rating => (
-                  <button
-                    key={rating}
-                    onClick={() => setFeedbackRating(rating)}
-                    className={`w-12 h-12 rounded-lg border-2 transition-all ${
-                      feedbackRating >= rating 
-                        ? 'bg-yellow-500 border-yellow-500 text-black' 
-                        : 'border-gray-300 dark:border-gray-700 hover:border-yellow-500 dark:hover:border-yellow-400 text-gray-500 dark:text-gray-400'
-                    }`}
-                  >
-                    ★
-                  </button>
                 ))}
+                {externalProblems.length === 0 && (
+                  <p className="text-gray-500 italic">No external problems added yet</p>
+                )}
               </div>
+            </div>
+          </div>
 
-              <textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="Any thoughts on this exercise? (optional)"
-                className="w-full bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-cyan-500 dark:focus:border-cyan-400 transition-colors resize-none"
-                rows={3}
+          {/* Next Button */}
+          <button
+            onClick={() => {
+              if (internalProblems.length > 0) {
+                setCurrentStage(1)
+                setCurrentCategorizingIndex(0)
+              } else if (externalProblems.length > 0) {
+                setCurrentStage(2)
+                setCurrentExternalIndex(0)
+              } else {
+                setCurrentStage(3)
+              }
+            }}
+            disabled={internalProblems.length === 0 && externalProblems.length === 0}
+            className={`w-full py-4 rounded-lg font-semibold transition-all ${
+              internalProblems.length > 0 || externalProblems.length > 0
+                ? 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
+                : 'bg-gray-700 cursor-not-allowed opacity-50'
+            }`}
+          >
+            {internalProblems.length > 0 || externalProblems.length > 0
+              ? `Continue with ${internalProblems.length + externalProblems.length} problems`
+              : 'Add at least one problem to continue'
+            }
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (currentStage === 1) {
+    // Stage 1: Internal Problem Categorization
+    const currentProblem = internalProblems[currentCategorizingIndex]
+    const progress = ((currentCategorizingIndex + 1) / internalProblems.length) * 100
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8 relative">
+        <div className="absolute top-8 right-8 flex gap-4">
+          <button 
+            onClick={() => setCurrentStage(0)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            BACK
+          </button>
+          <button 
+            onClick={onComplete}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Home className="w-5 h-5" />
+            DASHBOARD
+          </button>
+        </div>
+
+        <div className="max-w-3xl mx-auto mt-16">
+          <div className="text-sm text-gray-400 mb-4">STEP 2 OF {getTotalSteps()}</div>
+          
+          <h1 className="text-4xl font-bold mb-6">
+            {day1Content.categorization.title}
+          </h1>
+
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between text-sm text-gray-400 mb-2">
+              <span>Problem {currentCategorizingIndex + 1} of {internalProblems.length}</span>
+              <span>{Math.round(progress)}% Complete</span>
+            </div>
+            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
               />
             </div>
+          </div>
 
+          {/* Current Problem */}
+          <div className="bg-gray-800 rounded-xl p-6 mb-8">
+            <div className="text-sm text-blue-400 mb-2">💭 Internal Problem</div>
+            <div className="text-2xl font-semibold">{currentProblem.text}</div>
+          </div>
+
+          <p className="text-lg text-gray-300 mb-6">
+            {day1Content.categorization.question}
+          </p>
+
+          {/* Categories */}
+          <div className="space-y-4">
+            {Object.entries(day1Content.categorization.categories).map(([key, category]: [string, any]) => (
+              <div key={key} className="bg-gray-800 rounded-xl p-6">
+                <h3 className="text-xl font-semibold mb-3 text-blue-400">
+                  {category.name}
+                </h3>
+                <p className="text-gray-400 mb-4">{category.description}</p>
+                
+                <div className="grid gap-2">
+                  {category.subcategories.map((sub: any) => (
+                    <button
+                      key={sub.id}
+                      onClick={() => categorizeInternalProblem(category.name, sub.name)}
+                      className="text-left p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-all group"
+                    >
+                      <div className="font-semibold text-white group-hover:text-blue-400 transition-colors">
+                        {sub.name}
+                      </div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        {sub.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Skip Option */}
             <button
-              onClick={() => {
-                saveReflection({
-                  internalProblems,
-                  externalProblems,
-                  stage: 'day1_complete'
-                })
-              }}
+              onClick={() => categorizeInternalProblem('Unknown')}
+              className="w-full p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
+            >
+              I'm not sure - skip this one
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (currentStage === 2) {
+    // Stage 2: External Problem Assessment
+    const currentProblem = externalProblems[currentExternalIndex]
+    const progress = ((currentExternalIndex + 1) / externalProblems.length) * 100
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8 relative">
+        <div className="absolute top-8 right-8 flex gap-4">
+          <button 
+            onClick={() => {
+              if (internalProblems.length > 0) {
+                setCurrentStage(1)
+                setCurrentCategorizingIndex(internalProblems.length - 1)
+              } else {
+                setCurrentStage(0)
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            BACK
+          </button>
+          <button 
+            onClick={onComplete}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Home className="w-5 h-5" />
+            DASHBOARD
+          </button>
+        </div>
+
+        <div className="max-w-3xl mx-auto mt-16">
+          <div className="text-sm text-gray-400 mb-4">
+            STEP {internalProblems.length > 0 ? 3 : 2} OF {getTotalSteps()}
+          </div>
+          
+          <h1 className="text-4xl font-bold mb-6">Assess External Factors</h1>
+
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between text-sm text-gray-400 mb-2">
+              <span>Problem {currentExternalIndex + 1} of {externalProblems.length}</span>
+              <span>{Math.round(progress)}% Complete</span>
+            </div>
+            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          <ExternalProblemAssessment
+            problem={currentProblem}
+            onComplete={handleExternalAssessment}
+            onSkip={() => {
+              if (currentExternalIndex < externalProblems.length - 1) {
+                setCurrentExternalIndex(currentExternalIndex + 1)
+              } else {
+                setCurrentStage(3)
+              }
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (currentStage === 3) {
+    // Stage 3: Summary and Completion
+    const categorizedProblems = internalProblems.reduce((acc, problem) => {
+      const category = problem.category || 'Uncategorized'
+      if (!acc[category]) acc[category] = []
+      acc[category].push(problem)
+      return acc
+    }, {} as Record<string, InternalProblem[]>)
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-8 relative">
+        {showCelebration && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-75">
+            <div className="text-center animate-bounce">
+              <div className="text-8xl mb-4">🎉</div>
+              <h2 className="text-4xl font-bold mb-2">Awesome Work!</h2>
+              <p className="text-xl text-gray-300">You've completed Day 1!</p>
+            </div>
+          </div>
+        )}
+
+        <div className="absolute top-8 right-8 flex gap-4">
+          <button 
+            onClick={() => {
+              if (externalProblems.length > 0) {
+                setCurrentStage(2)
+                setCurrentExternalIndex(externalProblems.length - 1)
+              } else if (internalProblems.length > 0) {
+                setCurrentStage(1)
+                setCurrentCategorizingIndex(internalProblems.length - 1)
+              } else {
+                setCurrentStage(0)
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            BACK
+          </button>
+          <button 
+            onClick={onComplete}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Home className="w-5 h-5" />
+            DASHBOARD
+          </button>
+        </div>
+
+        <div className="max-w-4xl mx-auto mt-16">
+          <div className="text-sm text-gray-400 mb-4">
+            STEP {getTotalSteps()} OF {getTotalSteps()}
+          </div>
+          
+          <h1 className="text-4xl font-bold mb-2">
+            {day1Content.summary.title}
+          </h1>
+          <p className="text-xl text-gray-300 mb-8">
+            {day1Content.summary.subtitle}
+          </p>
+
+          {/* Statistics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-gray-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-blue-400">
+                {internalProblems.length}
+              </div>
+              <div className="text-sm text-gray-400">Internal Problems</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-orange-400">
+                {externalProblems.length}
+              </div>
+              <div className="text-sm text-gray-400">External Problems</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-purple-400">
+                {Object.keys(categorizedProblems).length}
+              </div>
+              <div className="text-sm text-gray-400">Root Categories</div>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-green-400">
+                {internalProblems.filter(p => p.category && p.category !== 'Unknown').length}
+              </div>
+              <div className="text-sm text-gray-400">Categorized</div>
+            </div>
+          </div>
+
+          {/* Internal Problems by Category */}
+          {internalProblems.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-6 mb-6">
+              <h2 className="text-2xl font-semibold mb-4 text-blue-400">
+                💭 Internal Problems by Root Cause
+              </h2>
+              {Object.entries(categorizedProblems).map(([category, problems]) => (
+                <div key={category} className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                    {category} ({problems.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {problems.map((problem) => (
+                      <div key={problem.id} className="bg-gray-700 rounded-lg p-3">
+                        <div className="text-white">{problem.text}</div>
+                        {problem.subcategory && (
+                          <div className="text-sm text-gray-400 mt-1">
+                            → {problem.subcategory}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* External Problems with Assessments */}
+          {externalProblems.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-6 mb-6">
+              <h2 className="text-2xl font-semibold mb-4 text-orange-400">
+                🌍 External Problems Assessment
+              </h2>
+              <div className="space-y-4">
+                {externalProblems.map((problem) => (
+                  <div key={problem.id} className="bg-gray-700 rounded-lg p-4">
+                    <div className="text-white font-semibold mb-2">{problem.text}</div>
+                    {problem.assessment && (
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-400">Control Level:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 bg-gray-600 rounded-full h-2">
+                              <div 
+                                className="bg-blue-500 h-2 rounded-full"
+                                style={{ width: `${problem.assessment.control * 10}%` }}
+                              />
+                            </div>
+                            <span className="text-white">{problem.assessment.control}/10</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Impact Level:</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 bg-gray-600 rounded-full h-2">
+                              <div 
+                                className="bg-orange-500 h-2 rounded-full"
+                                style={{ width: `${problem.assessment.impact * 10}%` }}
+                              />
+                            </div>
+                            <span className="text-white">{problem.assessment.impact}/10</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Insights */}
+          <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl p-6 mb-8">
+            <h2 className="text-2xl font-semibold mb-4">✨ Insights</h2>
+            <div className="space-y-3 text-gray-300">
+              {day1Content.summary.insights.map((insight: string, index: number) => (
+                <div key={index} className="flex items-start gap-3">
+                  <span className="text-blue-400 mt-1">•</span>
+                  <span>{insight}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Feedback Section */}
+          <div className="bg-gray-800 rounded-xl p-6 mb-8">
+            <h3 className="text-xl font-semibold mb-4">How was this exercise?</h3>
+            
+            {/* Star Rating */}
+            <div className="flex gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setFeedbackRating(star)}
+                  className="text-3xl transition-transform hover:scale-110"
+                >
+                  <Star 
+                    className={`w-8 h-8 ${
+                      star <= feedbackRating 
+                        ? 'fill-yellow-400 text-yellow-400' 
+                        : 'text-gray-600'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Feedback Text */}
+            <textarea
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="Any thoughts or feedback? (Optional)"
+              className="w-full px-4 py-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              rows={3}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4">
+            {isEditMode && (
+              <button
+                onClick={() => saveReflection(false)}
+                disabled={saving}
+                className="flex-1 py-4 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-all"
+              >
+                {saving ? 'SAVING...' : 'SAVE CHANGES'}
+              </button>
+            )}
+            <button
+              onClick={() => saveReflection(true)}
               disabled={saving}
-              className="w-full bg-green-500 text-black font-mono font-bold py-4 rounded hover:bg-green-400 disabled:opacity-50 transition-colors"
+              className="flex-1 py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 rounded-lg font-semibold transition-all"
             >
               {saving ? 'SAVING...' : 'COMPLETE DAY 1'}
             </button>
           </div>
         </div>
-      )
-    }
+      </div>
+    )
   }
 
   // Fallback for other days
